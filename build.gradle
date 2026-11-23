@@ -29,6 +29,21 @@ dependencies {
 	mappings loom.officialMojangMappings()
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Pure-Java Java Sound SPI decoders for MP3 and OGG Vorbis streams.
+	// Bundled with the mod so no external native player is required.
+	def audioLibs = [
+			"dev.mccue:mp3spi:${project.audio_decoder_version}",
+			"dev.mccue:jlayer-decoder:${project.audio_decoder_version}",
+			"dev.mccue:tritonus-share:${project.audio_decoder_version}",
+			"dev.mccue:vorbisspi:${project.audio_decoder_version}",
+			"dev.mccue:jogg:${project.audio_decoder_version}",
+			"dev.mccue:jorbis:${project.audio_decoder_version}"
+	]
+	audioLibs.each { dep ->
+		implementation dep
+		include dep
+	}
 }
 
 processResources {

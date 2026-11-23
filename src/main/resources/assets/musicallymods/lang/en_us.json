@@ -1,15 +1,11 @@
 {
-  "category.musicallymods": "MusicallyMods",
+  "key.category.musicallymods.main": "MusicallyMods",
+  "key.category.musicallymods": "MusicallyMods",
   "key.musicallymods.open": "Open MusicallyMods",
-  "key.musicallymods.playpause": "Play/Pause",
+  "key.musicallymods.lyrics": "Toggle Lyrics HUD",
+  "key.musicallymods.playpause": "Toggle Playback",
   "key.musicallymods.next": "Next Track",
   "key.musicallymods.prev": "Previous Track",
-  "key.musicallymods.hudtoggle": "Toggle HUD",
   "screen.musicallymods.title": "MusicallyMods",
-  "screen.musicallymods.home": "Home",
-  "screen.musicallymods.search": "Search",
-  "screen.musicallymods.library": "Library",
-  "screen.musicallymods.playlists": "Playlists",
-  "screen.musicallymods.accounts": "Connected Accounts",
-  "screen.musicallymods.settings": "Settings"
+  "screen.musicallymods.settings": "MusicallyMods Settings"
 }
