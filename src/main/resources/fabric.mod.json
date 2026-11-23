@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "musicallymods",
+  "version": "${version}",
+  "name": "MusicallyMods",
+  "description": "A multi-platform music hub integrated into Minecraft. Manage Spotify and YouTube Music from a unified interface.",
+  "authors": [
+    "Alpoyy"
+  ],
+  "contact": {
+    "homepage": "https://github.com/RyzzXCODING/MusicallyMods-icon",
+    "sources": "https://github.com/RyzzXCODING/MusicallyMods"
+  },
+  "license": "MIT",
+  "icon": "assets/musicallymods/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "cc.alpoyy.musicallymods.client.MusicallyModsClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.2",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}
