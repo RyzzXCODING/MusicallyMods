@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (source-only verification)
+## 0.3.0
 
 - Replaced one-shot PATH/executable detection with OS/arch-aware, ordered detection across configured path,
   mod-managed dependency directory, `PATH` and common user install locations. Timestamped `--version`
@@ -29,7 +29,10 @@
   diagnostics, artwork/results where supported and clipped scroll regions.
 - Preserved existing player, lyrics HUD, keybinds, colors, config schema `2` fields and migration behavior.
 
-BUILD NOT PERFORMED — compilation and in-game testing remain unverified.
+`0.3.0` was built with `./gradlew clean build`. The remapped client JAR reports version `0.3.0` with the
+expected client entrypoint and dependency ranges, contains all six bundled decoder JARs, keeps the official
+icon (SHA-256 `0ff25b5f…fc11dd`) and Java 21 bytecode (class major 65). The release JAR SHA-256 is
+`3090bcdc…10768`. Minecraft itself was not launched.
 
 ## 0.2.1
 

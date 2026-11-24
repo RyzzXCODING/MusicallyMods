@@ -54,6 +54,30 @@ public final class AuthStore {
         public boolean canRefresh() {
             return !refreshToken.isBlank();
         }
+
+        public String accessToken() {
+            return accessToken;
+        }
+
+        public String refreshToken() {
+            return refreshToken;
+        }
+
+        public long expiresAtEpochMs() {
+            return expiresAtEpochMs;
+        }
+
+        public String accountId() {
+            return accountId;
+        }
+
+        public String displayName() {
+            return displayName;
+        }
+
+        public String scopes() {
+            return scopes;
+        }
     }
 
     public static final class Data {

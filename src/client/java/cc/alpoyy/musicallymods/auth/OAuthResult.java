@@ -9,7 +9,7 @@ public final class OAuthResult {
 
     /** A prepared authorization request and its local loopback callback. */
     public record Pending(String authorizationUrl, String redirectUri, String codeVerifier,
-                          CompletableFuture<Callback> callback, Runnable cancel) {
+                          String state, CompletableFuture<Callback> callback, Runnable cancel) {
     }
 
     /** The parameters returned to the loopback redirect URI; never trusted without a state check. */

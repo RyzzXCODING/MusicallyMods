@@ -86,7 +86,7 @@ public final class OAuthClient {
 
         CompletableFuture<OAuthResult.Callback> callback = CompletableFuture.supplyAsync(
                 () -> listen(listener, state, redirect), WORKER);
-        return new OAuthResult.Pending(url, redirect, verifier, callback, () -> {
+        return new OAuthResult.Pending(url, redirect, verifier, state, callback, () -> {
             try {
                 listener.close();
             } catch (IOException ignored) {

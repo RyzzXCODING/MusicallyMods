@@ -159,8 +159,8 @@ public final class YtDlpManager {
     /** Downloads a named official release asset only after the caller has confirmed the action. */
     public static CompletableFuture<InstallResult> installAsync(AtomicBoolean cancel,
                                                                 Consumer<DownloadProgress> progress) {
-        if (cancel == null) cancel = new AtomicBoolean(false);
-        if (cancel.get()) {
+        final AtomicBoolean cancellation = cancel == null ? new AtomicBoolean(false) : cancel;
+        if (cancellation.get()) {
             return CompletableFuture.completedFuture(new InstallResult(false, "Installation cancelled."));
         }
         String asset = installAssetName();
@@ -174,16 +174,16 @@ public final class YtDlpManager {
             byte[] checksums;
             byte[] binary;
             try {
-                publish(progress, 0, 1, "Fetching official checksums", cancel.get());
+                publish(progress, 0, 1, "Fetching official checksums", cancellation.get());
                 checksums = cc.alpoyy.musicallymods.util.NetworkManager.download(
-                        RELEASE_BASE + "SHA2-256SUMS", 512L * 1024L, cancel, null).join();
-                if (cancel.get()) return cancelled();
+                        RELEASE_BASE + "SHA2-256SUMS", 512L * 1024L, cancellation, null).join();
+                if (cancellation.get()) return cancelled();
 
-                publish(progress, 0, 1, "Fetching official yt-dlp release", cancel.get());
+                publish(progress, 0, 1, "Fetching official yt-dlp release", cancellation.get());
                 binary = cc.alpoyy.musicallymods.util.NetworkManager.download(
-                        RELEASE_BASE + asset, MAX_DOWNLOAD_BYTES, cancel,
-                        downloaded -> publish(progress, downloaded, -1, "Downloading", cancel.get())).join();
-                if (cancel.get()) return cancelled();
+                        RELEASE_BASE + asset, MAX_DOWNLOAD_BYTES, cancellation,
+                        downloaded -> publish(progress, downloaded, -1, "Downloading", cancellation.get())).join();
+                if (cancellation.get()) return cancelled();
 
                 String expected = checksumFor(checksums, asset);
                 if (expected == null) {
@@ -194,7 +194,7 @@ public final class YtDlpManager {
                     return new InstallResult(false,
                             "Checksum verification failed. The downloaded file was discarded.");
                 }
-                return installVerified(binary, asset, progress, cancel);
+                return installVerified(binary, asset, progress, cancellation);
             } catch (IOException | RuntimeException e) {
                 Errors.logTechnical("yt-dlp install failed", e);
                 return new InstallResult(false,

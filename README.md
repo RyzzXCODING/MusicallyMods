@@ -180,7 +180,7 @@ For end users or maintainers with a normal toolchain:
 
 Place the produced client JAR in `mods/` alongside Fabric API for Minecraft 1.21.11.
 
-The `0.2.1` release JAR was verified after `./gradlew build`: correct `fabric.mod.json` entrypoint and dependency ranges, bundled audio decoder JARs under `META-INF/jars/`, exact official icon (SHA-256 `0ff25b5f…fc11dd`), and Java 21 bytecode (class major 65). Minecraft itself was not launched.
+The `0.3.0` release JAR was verified after `./gradlew clean build`: `fabric.mod.json` reports version `0.3.0` with the correct client entrypoint and dependency ranges, bundled audio decoder JARs are present under `META-INF/jars/`, the icon is unchanged (SHA-256 `0ff25b5f…fc11dd`), and all classes are Java 21 bytecode (major 65). The release JAR SHA-256 is `3090bcdcdbaf2ffbea8fa449e776f985e63f55e25895641b9d0708baeba10768`. Minecraft itself was not launched.
 
 ## Audio dependencies
 

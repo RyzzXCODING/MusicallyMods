@@ -28,6 +28,9 @@ abstract class BaseConnection {
         view = new PlatformConnection.View(state, account, error, detail, hasSession, playbackAvailable);
     }
 
+    /** Silent, user-independent session validation; each provider implements its own check. */
+    public abstract CompletableFuture<Void> reconnect();
+
     public CompletableFuture<Void> disconnect() {
         AuthStore.clearSession(provider);
         update(PlatformConnection.State.DISCONNECTED, "", "", "Saved session removed from this device.", false);
