@@ -4,6 +4,7 @@ import cc.alpoyy.musicallymods.MusicallyMods;
 import cc.alpoyy.musicallymods.audio.AudioManager;
 import cc.alpoyy.musicallymods.config.ModConfig;
 import cc.alpoyy.musicallymods.hud.LyricsHud;
+import cc.alpoyy.musicallymods.music.ServiceManager;
 import cc.alpoyy.musicallymods.util.NetworkManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -23,10 +24,12 @@ public final class MusicallyModsClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             ModConfig.saveIfDirty();
             AudioManager.get().shutdown();
+            ServiceManager.shutdown();
             NetworkManager.shutdown();
         });
 
         MusicallyMods.LOGGER.info(
-                "MusicallyMods client ready. Integrations: Deezer previews, Radio Browser stations, direct streams, LRCLIB lyrics.");
+                "MusicallyMods client ready. Integrations: Deezer previews, Radio Browser stations, direct streams, "
+                        + "optional opt-in yt-dlp bridge, LRCLIB lyrics. Spotify and SoundCloud remain explicitly unavailable.");
     }
 }

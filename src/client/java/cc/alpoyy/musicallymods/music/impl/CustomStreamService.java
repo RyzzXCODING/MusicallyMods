@@ -3,6 +3,7 @@ package cc.alpoyy.musicallymods.music.impl;
 import cc.alpoyy.musicallymods.music.MusicService;
 import cc.alpoyy.musicallymods.music.ServiceCapabilities;
 import cc.alpoyy.musicallymods.music.ServiceResult;
+import cc.alpoyy.musicallymods.music.ServiceStatus;
 import cc.alpoyy.musicallymods.music.Track;
 
 import java.net.URI;
@@ -33,6 +34,13 @@ public final class CustomStreamService implements MusicService {
     @Override
     public String statusText() {
         return "Paste a legal direct http(s) audio URL. No credentials required.";
+    }
+
+    @Override
+    public ServiceStatus status() {
+        return new ServiceStatus(ServiceStatus.IntegrationLevel.IMPLEMENTED,
+                ServiceStatus.PlaybackSupport.NATIVE, ServiceStatus.AuthRequirement.NONE,
+                "Implemented - direct http(s) streams", CAPABILITIES.note());
     }
 
     @Override

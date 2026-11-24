@@ -6,6 +6,7 @@ import cc.alpoyy.musicallymods.config.ModConfig;
 import cc.alpoyy.musicallymods.lyrics.LyricsManager;
 import cc.alpoyy.musicallymods.music.MusicService;
 import cc.alpoyy.musicallymods.music.ServiceManager;
+import cc.alpoyy.musicallymods.music.ServiceStatus;
 import cc.alpoyy.musicallymods.music.Track;
 import cc.alpoyy.musicallymods.util.ArtworkCache;
 import cc.alpoyy.musicallymods.util.Errors;
@@ -20,20 +21,30 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Real player GUI: async search, service status, playback controls, artwork and lyrics status. */
+/** Responsive player GUI with a fixed header/player and an independently scrolling result list. */
 public final class MusicPlayerScreen extends Screen {
-    private static final int ROW_HEIGHT = 40;
-    private static final int MARGIN = 12;
+    private static final String DEFAULT_STATUS = "Choose a service, then search. Only legal, key-less sources are enabled.";
 
     private String query = "";
     private boolean editingQuery;
     private List<Track> results = List.of();
-    private String status = "Choose a service, then search. Only free/key-less integrations are enabled.";
+    private String status = DEFAULT_STATUS;
     private boolean searching;
     private long searchGeneration;
     private int scrollRow;
+    private int visibleRows = 1;
     private int selectedRow = -1;
     private Track lastTrack;
+    private boolean showNote;
+    private boolean compact;
+    private boolean ultraCompact;
+    private boolean showProgress;
+    private boolean showVolume;
+    private int titleY;
+    private int artistY;
+    private int stateY;
+    private int barY;
+    private int timeY;
 
     private Ui.Rect searchRect;
     private Ui.Rect searchButtonRect;
@@ -41,6 +52,10 @@ public final class MusicPlayerScreen extends Screen {
     private Ui.Rect nextServiceRect;
     private Ui.Rect settingsRect;
     private Ui.Rect resultsRect;
+    private Ui.Rect resultsViewport;
+    private Ui.Rect scrollbarRect;
+    private Ui.Rect playerRect;
+    private Ui.Rect artRect;
     private Ui.Rect playPauseRect;
     private Ui.Rect stopRect;
     private Ui.Rect previousRect;
@@ -57,39 +72,116 @@ public final class MusicPlayerScreen extends Screen {
 
     @Override
     protected void init() {
-        int x = MARGIN;
-        int right = width - MARGIN;
-        previousServiceRect = new Ui.Rect(right - 176, 10, 22, 18);
-        nextServiceRect = new Ui.Rect(right - 150, 10, 22, 18);
-        settingsRect = new Ui.Rect(right - 82, 10, 82, 18);
-        searchRect = new Ui.Rect(x, 32, Math.max(80, width - 222), 20);
-        searchButtonRect = new Ui.Rect(searchRect.x() + searchRect.width() + 6, 32, 68, 20);
-        int panelTop = 78;
-        int playerHeight = Math.min(148, Math.max(120, height / 3));
-        int panelBottom = Math.max(panelTop + 60, height - playerHeight - 8);
-        resultsRect = new Ui.Rect(x, panelTop, width - MARGIN * 2, panelBottom - panelTop - 6);
-        int py = height - playerHeight;
-        int buttonY = py + 72;
-        playPauseRect = new Ui.Rect(x + 80, buttonY, 68, 20);
-        previousRect = new Ui.Rect(x + 152, buttonY, 20, 20);
-        nextRect = new Ui.Rect(x + 176, buttonY, 20, 20);
-        stopRect = new Ui.Rect(x + 200, buttonY, 44, 20);
-        lyricsRect = new Ui.Rect(x + 248, buttonY, 62, 20);
-        volumeDownRect = new Ui.Rect(x + 80, py + 100, 20, 16);
-        volumeRect = new Ui.Rect(x + 104, py + 100, Math.max(40, width - MARGIN * 2 - 190), 16);
-        volumeUpRect = new Ui.Rect(volumeRect.x() + volumeRect.width() + 4, py + 100, 20, 16);
+        int margin = width < 520 ? 8 : 12;
+        int right = Math.max(margin, width - margin);
+        int availableWidth = Math.max(0, right - margin);
+        int headerY = 8;
+        int headerHeight = 18;
+
+        int navTotal = Math.min(124, Math.max(36, availableWidth));
+        int settingsWidth = Math.max(24, Math.min(width < 520 ? 58 : 72, navTotal / 2));
+        int arrowWidth = Math.max(12, Math.min(20, (navTotal - settingsWidth - 6) / 2));
+        settingsRect = new Ui.Rect(right - settingsWidth, headerY, settingsWidth, headerHeight);
+        nextServiceRect = new Ui.Rect(settingsRect.x() - 4 - arrowWidth, headerY, arrowWidth, headerHeight);
+        previousServiceRect = new Ui.Rect(nextServiceRect.x() - 2 - arrowWidth, headerY, arrowWidth, headerHeight);
+        previousServiceRect = previousServiceRect.intersection(new Ui.Rect(0, 0, width, height));
+        nextServiceRect = nextServiceRect.intersection(new Ui.Rect(0, 0, width, height));
+        settingsRect = settingsRect.intersection(new Ui.Rect(0, 0, width, height));
+
+        int searchY = 30;
+        int searchHeight = 20;
+        int buttonWidth = Math.max(40, Math.min(width < 520 ? 58 : 68, availableWidth / 3));
+        int inputWidth = Math.max(0, availableWidth - buttonWidth - 6);
+        searchRect = new Ui.Rect(margin, searchY, inputWidth, searchHeight);
+        searchButtonRect = new Ui.Rect(searchRect.right() + 6, searchY, buttonWidth, searchHeight);
+
+        showNote = height >= 330;
+        int listTop = showNote ? 78 : (height >= 260 ? 62 : 56);
+        int minListHeight = height >= 260 ? 36 : 0;
+        int maxPlayerHeight = Math.max(80, Math.min(148, height / 3));
+        int playerHeight = Math.min(maxPlayerHeight, Math.max(60, height - listTop - minListHeight - 8));
+        int playerY = Math.max(listTop, height - playerHeight - 4);
+        playerHeight = Math.max(0, Math.min(playerHeight, height - playerY - 4));
+        int listBottom = Math.max(listTop, playerY - 6);
+        resultsRect = new Ui.Rect(margin, listTop, availableWidth, Math.max(0, listBottom - listTop));
+        int scrollbarWidth = ModConfig.get().ui.showScrollbars && resultsRect.width() > 80 ? 6 : 0;
+        resultsViewport = new Ui.Rect(resultsRect.x() + 4, resultsRect.y() + 4,
+                Math.max(0, resultsRect.width() - 8 - scrollbarWidth),
+                Math.max(0, resultsRect.height() - 8));
+        scrollbarRect = new Ui.Rect(resultsRect.right() - scrollbarWidth - 2, resultsRect.y() + 4,
+                Math.max(0, scrollbarWidth - 2), resultsViewport.height());
+
+        playerRect = new Ui.Rect(margin, playerY, availableWidth, playerHeight);
+        ultraCompact = playerRect.height() < 84;
+        compact = width < 520 || playerRect.height() < 128;
+        int artSize = !compact && playerRect.height() >= 110 ? 64 : 0;
+        artRect = new Ui.Rect(playerRect.x() + 6, playerRect.y() + 6, artSize, artSize);
+        int textX = playerRect.x() + 6 + (artSize > 0 ? artSize + 8 : 0);
+        int textRight = playerRect.right() - 6;
+
+        if (ultraCompact) {
+            titleY = playerRect.y() + 2;
+            artistY = playerRect.y() + 15;
+            stateY = artistY;
+            barY = artistY;
+            timeY = artistY;
+            showProgress = false;
+            showVolume = false;
+        } else {
+            int top = playerRect.height() >= 130 ? 12 : 6;
+            titleY = playerRect.y() + top;
+            artistY = titleY + 14;
+            stateY = artistY + 14;
+            barY = stateY + 14;
+            timeY = barY + 7;
+            showProgress = true;
+            showVolume = true;
+        }
+
+        int buttonY = barY + (ultraCompact ? 14 : 20);
+        if (!ultraCompact && buttonY + 18 > playerRect.bottom() - 2) {
+            buttonY = Math.max(playerRect.y() + 4, playerRect.bottom() - 20);
+            showProgress = buttonY > timeY + 8;
+        }
+        int buttonHeight = ultraCompact ? 16 : 18;
+        int[] cursor = {textX};
+        playPauseRect = place(cursor, buttonY, 56, buttonHeight, textRight, 4);
+        stopRect = place(cursor, buttonY, 42, buttonHeight, textRight, 4);
+        lyricsRect = place(cursor, buttonY, compact ? 54 : 68, buttonHeight, textRight, 4);
+        previousRect = place(cursor, buttonY, 20, buttonHeight, textRight, 4);
+        nextRect = place(cursor, buttonY, 20, buttonHeight, textRight, 4);
+
+        int volumeY = buttonY + buttonHeight + 6;
+        showVolume = showVolume && !ultraCompact && volumeY + 16 <= playerRect.bottom() - 2
+                && textRight - textX >= 70;
+        int stepWidth = 18;
+        if (showVolume) {
+            volumeDownRect = new Ui.Rect(textX, volumeY, stepWidth, 16);
+            int volumeStart = volumeDownRect.right() + 4;
+            int volumeWidth = Math.max(24, textRight - (compact ? 0 : 64) - volumeStart - stepWidth - 4);
+            volumeRect = new Ui.Rect(volumeStart, volumeY, volumeWidth, 16);
+            volumeUpRect = new Ui.Rect(volumeRect.right() + 4, volumeY, stepWidth, 16);
+        } else {
+            volumeDownRect = new Ui.Rect(0, 0, 0, 0);
+            volumeRect = new Ui.Rect(0, 0, 0, 0);
+            volumeUpRect = new Ui.Rect(0, 0, 0, 0);
+        }
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        ModConfig cfg = ModConfig.get();
-        ModConfig.Colors c = cfg.colors;
+        ModConfig.Colors c = ModConfig.get().colors;
         renderBackground(graphics, mouseX, mouseY, delta);
         graphics.fill(0, 0, width, height, c.mainBg);
 
         MusicService service = ServiceManager.active();
-        Ui.label(graphics, font, "MusicallyMods", MARGIN, 12, c.textPrimary);
-        Ui.label(graphics, font, "Service: " + Ui.fit(font, service.displayName(), 160), MARGIN + 96, 12, c.textSecondary);
+        ServiceStatus serviceStatus = service.status();
+        Ui.label(graphics, font, "MusicallyMods", Math.max(8, width < 520 ? 8 : 12), 12, c.textPrimary);
+        if (width >= 560) {
+            int labelX = (width < 520 ? 8 : 12) + font.width("MusicallyMods") + 12;
+            Ui.label(graphics, font, Ui.fit(font, service.displayName(),
+                    previousServiceRect.x() - labelX - 8), labelX, 12, c.textSecondary);
+        }
         Ui.button(graphics, font, previousServiceRect, "<", c.controls, c.accent, c.textPrimary, true,
                 previousServiceRect.contains(mouseX, mouseY));
         Ui.button(graphics, font, nextServiceRect, ">", c.controls, c.accent, c.textPrimary, true,
@@ -104,12 +196,18 @@ public final class MusicPlayerScreen extends Screen {
         Ui.button(graphics, font, searchButtonRect, searching ? "..." : "Search", c.controls, c.accent,
                 c.textPrimary, !searching, searchButtonRect.contains(mouseX, mouseY));
 
-        int lineY = 60;
-        Ui.label(graphics, font, Ui.fit(font, status, width - MARGIN * 2), MARGIN, lineY, c.textSecondary);
-        lineY += 10;
-        List<String> note = Ui.wrap(font, service.capabilities().note(), width - MARGIN * 2 - 10, 2);
-        if (!note.isEmpty()) Ui.label(graphics, font, Ui.fit(font, note.get(0), width - MARGIN * 2),
-                MARGIN, lineY, c.textSecondary);
+        int left = resultsRect.x();
+        int lineHeight = font.lineHeight;
+        int statusY = searchRect.bottom() + 2;
+        int noteY = statusY + lineHeight;
+        if (statusY + lineHeight <= resultsRect.y()) {
+            Ui.label(graphics, font, Ui.fit(font, service.displayName() + ": " + status,
+                    resultsRect.width()), left, statusY, c.textSecondary);
+        }
+        if (showNote && noteY + lineHeight <= resultsRect.y()) {
+            Ui.label(graphics, font, Ui.fit(font, serviceStatus.line(), resultsRect.width()),
+                    left, noteY, c.textSecondary);
+        }
 
         Ui.panel(graphics, resultsRect, c.secondaryBg, c.accent);
         drawResults(graphics, mouseX, mouseY, c);
@@ -118,113 +216,114 @@ public final class MusicPlayerScreen extends Screen {
 
     private void drawResults(GuiGraphics graphics, int mouseX, int mouseY, ModConfig.Colors c) {
         rowRects.clear();
-        int x = resultsRect.x() + 4;
-        int y = resultsRect.y() + 4;
-        int w = resultsRect.width() - 8;
-        int visible = Math.max(1, (resultsRect.height() - 10) / ROW_HEIGHT);
-        int start = Math.max(0, Math.min(scrollRow, Math.max(0, results.size() - visible)));
-        scrollRow = start;
-        if (results.isEmpty()) {
-            String message = searching ? "Searching..." : "No results. Enter a query and press Search.";
-            Ui.label(graphics, font, message, x + 4, y + 6, c.textSecondary);
-            return;
+        int rowHeight = Math.max(32, Math.min(64, ModConfig.get().ui.resultRowHeight));
+        visibleRows = Math.max(1, resultsViewport.height() / rowHeight);
+        scrollRow = Ui.clampScroll(scrollRow, maxScroll());
+        if (selectedRow >= results.size()) selectedRow = results.size() - 1;
+
+        try (Ui.Scissor ignored = Ui.scissor(graphics, resultsViewport)) {
+            if (results.isEmpty()) {
+                String message = searching ? "Searching..." : "No results. Enter a query and press Search.";
+                Ui.label(graphics, font, message, resultsViewport.x() + 4, resultsViewport.y() + 6, c.textSecondary);
+            } else {
+                int textWidth = resultsViewport.width() - 10;
+                for (int i = 0; i < visibleRows && scrollRow + i < results.size(); i++) {
+                    int index = scrollRow + i;
+                    Track track = results.get(index);
+                    Ui.Rect row = new Ui.Rect(resultsViewport.x(), resultsViewport.y() + i * rowHeight,
+                            resultsViewport.width(), Math.max(1, rowHeight - 3));
+                    if (!row.intersects(resultsViewport)) continue;
+                    rowRects.add(row);
+                    boolean hovered = row.contains(mouseX, mouseY);
+                    boolean selected = index == selectedRow;
+                    int fill = selected ? c.controls : (hovered ? dimColor(c.secondaryBg) : c.secondaryBg);
+                    Ui.panel(graphics, row, fill, selected ? c.accent : 0);
+                    Ui.label(graphics, font, Ui.fit(font, (index + 1) + ". " + track.displayTitle(), textWidth - 44),
+                            row.x() + 4, row.y() + 3, c.textPrimary);
+                    Ui.label(graphics, font, Ui.fit(font, track.displayArtist() + "  |  " + track.note(), textWidth),
+                            row.x() + 4, row.y() + 16, c.textSecondary);
+                    String right = track.durationMs() > 0 ? Ui.formatTime(track.durationMs()) : "LIVE";
+                    graphics.drawString(font, right, row.right() - font.width(right) - 4,
+                            row.y() + 3, c.accent, false);
+                }
+            }
         }
-        for (int i = 0; i < visible && start + i < results.size(); i++) {
-            int index = start + i;
-            Track track = results.get(index);
-            Ui.Rect row = new Ui.Rect(x, y + i * ROW_HEIGHT, w, ROW_HEIGHT - 3);
-            rowRects.add(row);
-            boolean hovered = row.contains(mouseX, mouseY);
-            boolean selected = index == selectedRow;
-            int fill = selected ? c.controls : (hovered ? dimColor(c.secondaryBg) : c.secondaryBg);
-            Ui.panel(graphics, row, fill, selected ? c.accent : 0);
-            Ui.label(graphics, font, Ui.fit(font, (index + 1) + ". " + track.displayTitle(), w - 10),
-                    row.x() + 4, row.y() + 3, c.textPrimary);
-            Ui.label(graphics, font, Ui.fit(font, track.displayArtist() + "  |  " + track.note(), w - 10),
-                    row.x() + 4, row.y() + 16, c.textSecondary);
-            long duration = track.durationMs();
-            String right = duration > 0 ? Ui.formatTime(duration) : "LIVE";
-            graphics.drawString(font, right, row.x() + row.width() - font.width(right) - 5,
-                    row.y() + 3, c.accent, false);
+
+        if (ModConfig.get().ui.showScrollbars) {
+            Ui.scrollbar(graphics, scrollbarRect, scrollRow, maxScroll(), visibleRows, results.size(),
+                    dimColor(c.controls), c.accent);
         }
     }
 
     private void drawPlayer(GuiGraphics graphics, int mouseX, int mouseY, ModConfig.Colors c) {
         PlaybackSnapshot snap = AudioManager.get().snapshot();
-        int x = MARGIN;
-        int w = width - MARGIN * 2;
-        int panelHeight = Math.max(120, Math.min(148, height / 3));
-        int py = height - panelHeight;
-        Ui.panel(graphics, new Ui.Rect(x, py, w, panelHeight - 6), c.secondaryBg, c.accent);
-
-        if (snap.hasTrack()) {
-            ArtworkCache.request(snap.track());
-            if (!ArtworkCache.has(snap.track())) {
-                Ui.panel(graphics, new Ui.Rect(x + 8, py + 8, 64, 64), c.controls, c.accent);
-                Ui.label(graphics, font, "Art", x + 30, py + 34, c.textSecondary);
-            } else {
-                Ui.panel(graphics, new Ui.Rect(x + 6, py + 6, 68, 68), c.controls, c.accent);
-                ArtworkCache.render(graphics, snap.track(), x + 8, py + 8, 64, 64);
+        Ui.panel(graphics, playerRect, c.secondaryBg, c.accent);
+        try (Ui.Scissor ignored = Ui.scissor(graphics, playerRect)) {
+            int artSize = artRect.width();
+            if (artSize > 0) {
+                if (snap.hasTrack() && !snap.track().artworkUrl().isBlank()) {
+                    ArtworkCache.request(snap.track());
+                    Ui.panel(graphics, artRect, c.controls, c.accent);
+                    if (ArtworkCache.has(snap.track())) {
+                        ArtworkCache.render(graphics, snap.track(), artRect.x(), artRect.y(), artSize, artSize);
+                    } else {
+                        Ui.label(graphics, font, "Art", artRect.x() + artSize / 2 - font.width("Art") / 2,
+                                artRect.y() + artSize / 2 - 4, c.textSecondary);
+                    }
+                } else {
+                    Ui.panel(graphics, artRect, c.controls, c.accent);
+                    Ui.label(graphics, font, "No art", artRect.x() + 8, artRect.y() + artSize / 2 - 4, c.textSecondary);
+                }
             }
-        } else {
-            Ui.panel(graphics, new Ui.Rect(x + 8, py + 8, 64, 64), c.controls, c.accent);
-            Ui.label(graphics, font, "No art", x + 20, py + 34, c.textSecondary);
-        }
 
-        int tx = x + 80;
-        int tw = w - 88;
-        String title = snap.hasTrack() ? snap.track().displayTitle() : "Nothing playing";
-        String artist = snap.hasTrack() ? snap.track().displayArtist() : "Play a result to begin";
-        Ui.label(graphics, font, Ui.fit(font, title, tw), tx, py + 8, c.textPrimary);
-        Ui.label(graphics, font, Ui.fit(font, artist, tw), tx, py + 22, c.textSecondary);
-        String stateText = switch (snap.state()) {
-            case LOADING -> "Loading...";
-            case PLAYING -> "Playing";
-            case PAUSED -> "Paused";
-            case ERROR -> "Error";
-            case STOPPED -> "Stopped";
-        };
-        Ui.label(graphics, font, stateText + "  |  " + Ui.fit(font, snap.track() == null ? "" : snap.track().note(), tw - 60),
-                tx, py + 36, c.textSecondary);
+            int textX = playPauseRect.width() > 0 ? playPauseRect.x() : playerRect.x() + 6;
+            int textWidth = Math.max(0, playerRect.right() - 6 - textX);
+            String title = snap.hasTrack() ? snap.track().displayTitle() : "Nothing playing";
+            String artist = snap.hasTrack() ? snap.track().displayArtist() : "Play a result to begin";
+            Ui.label(graphics, font, Ui.fit(font, title, textWidth), textX, titleY, c.textPrimary);
+            Ui.label(graphics, font, Ui.fit(font, artist, textWidth), textX, artistY, c.textSecondary);
 
-        int barX = tx;
-        int barY = py + 54;
-        int barW = tw;
-        graphics.fill(barX, barY, barX + barW, barY + 8, c.controls);
-        if (snap.progress() > 0f) {
-            graphics.fill(barX, barY, barX + (int) (barW * snap.progress()), barY + 8, c.progress);
-        }
-        String time = Ui.formatTime(snap.positionMs()) + (snap.durationMs() > 0 ? " / " + Ui.formatTime(snap.durationMs()) : " / LIVE");
-        Ui.label(graphics, font, time, barX + barW - font.width(time), barY + 10, c.textSecondary);
+            if (!ultraCompact) {
+                String note = snap.hasTrack() ? snap.track().note() : "";
+                boolean failed = snap.hasError();
+                String stateText = failed ? "Error: " + snap.error()
+                        : snap.stateLabel() + (note.isBlank() ? "" : "  |  " + note);
+                Ui.label(graphics, font, Ui.fit(font, stateText, textWidth),
+                        textX, stateY, failed ? c.accent : c.textSecondary);
+            }
+            if (showProgress) {
+                graphics.fill(textX, barY, textX + textWidth, barY + 6, c.controls);
+                if (snap.progress() > 0f) {
+                    graphics.fill(textX, barY, textX + (int) (textWidth * snap.progress()), barY + 6, c.progress);
+                }
+                String time = Ui.formatTime(snap.positionMs())
+                        + (snap.durationMs() > 0 ? " / " + Ui.formatTime(snap.durationMs()) : " / LIVE");
+                Ui.label(graphics, font, Ui.fit(font, time, textWidth), textX, timeY, c.textSecondary);
+            }
 
-        boolean hasTrack = snap.hasTrack();
-        boolean canSkip = results.size() > 1;
-        boolean canPause = ServiceManager.active().capabilities().pauseResume();
-        Ui.button(graphics, font, playPauseRect, snap.state() == AudioManager.State.PAUSED ? "Play" : "Pause",
-                c.controls, c.accent, c.textPrimary, hasTrack && canPause, playPauseRect.contains(mouseX, mouseY));
-        Ui.button(graphics, font, previousRect, "<", c.controls, c.accent, c.textPrimary,
-                hasTrack && canSkip, previousRect.contains(mouseX, mouseY));
-        Ui.button(graphics, font, nextRect, ">", c.controls, c.accent, c.textPrimary,
-                hasTrack && canSkip, nextRect.contains(mouseX, mouseY));
-        Ui.button(graphics, font, stopRect, "Stop", c.controls, c.accent, c.textPrimary,
-                hasTrack, stopRect.contains(mouseX, mouseY));
-        Ui.button(graphics, font, lyricsRect, ModConfig.get().lyrics.enabled ? "Lyrics ON" : "Lyrics OFF",
-                c.controls, c.accent, c.textPrimary, true, lyricsRect.contains(mouseX, mouseY));
+            String playLabel = playLabel(snap);
+            boolean playEnabled = snap.hasTrack() && switch (snap.state()) {
+                case PLAYING, BUFFERING, PAUSED -> true;
+                case FAILED -> snap.canRetry();
+                case LOADING -> false;
+                default -> true;
+            };
+            drawButton(graphics, mouseX, mouseY, c, playPauseRect, playLabel, playEnabled);
+            boolean canSkip = results.size() > 1;
+            drawButton(graphics, mouseX, mouseY, c, previousRect, "<", canSkip);
+            drawButton(graphics, mouseX, mouseY, c, nextRect, ">", canSkip);
+            drawButton(graphics, mouseX, mouseY, c, stopRect, "Stop", snap.hasTrack());
+            drawButton(graphics, mouseX, mouseY, c, lyricsRect, compact ? "Lyrics" :
+                    (ModConfig.get().lyrics.enabled ? "Lyrics ON" : "Lyrics OFF"), true);
 
-        Ui.button(graphics, font, volumeDownRect, "-", c.controls, c.accent, c.textPrimary,
-                true, volumeDownRect.contains(mouseX, mouseY));
-        graphics.fill(volumeRect.x(), volumeRect.y() + 6, volumeRect.x() + volumeRect.width(),
-                volumeRect.y() + 10, c.controls);
-        graphics.fill(volumeRect.x(), volumeRect.y() + 6,
-                volumeRect.x() + (int) (volumeRect.width() * snap.volume()), volumeRect.y() + 10, c.progress);
-        Ui.button(graphics, font, volumeUpRect, "+", c.controls, c.accent, c.textPrimary,
-                true, volumeUpRect.contains(mouseX, mouseY));
-        Ui.label(graphics, font, "Volume " + Math.round(snap.volume() * 100) + "%",
-                volumeUpRect.x() + volumeUpRect.width() + 6, volumeRect.y(), c.textSecondary);
+            if (showVolume) {
+                drawButton(graphics, mouseX, mouseY, c, volumeDownRect, "-", true);
+                graphics.fill(volumeRect.x(), volumeRect.y() + 6, volumeRect.right(), volumeRect.y() + 10, c.controls);
+                graphics.fill(volumeRect.x(), volumeRect.y() + 6,
+                        volumeRect.x() + (int) (volumeRect.width() * snap.volume()), volumeRect.y() + 10, c.progress);
+                drawButton(graphics, mouseX, mouseY, c, volumeUpRect, "+", true);
+            }
 
-        if (snap.error() != null && !snap.error().isBlank()) {
-            Ui.label(graphics, font, Ui.fit(font, "Error: " + snap.error(), w - 12),
-                    x + 6, py + panelHeight - 16, c.accent);
         }
     }
 
@@ -250,44 +349,45 @@ public final class MusicPlayerScreen extends Screen {
             doSearch();
             return true;
         }
-        for (int i = 0; i < rowRects.size(); i++) {
-            if (rowRects.get(i).contains(mx, my)) {
-                int visibleRow = scrollRow + i;
-                if (visibleRow >= 0 && visibleRow < results.size()) playResult(visibleRow);
-                return true;
+        if (resultsViewport.contains(mx, my)) {
+            for (int i = 0; i < rowRects.size(); i++) {
+                if (rowRects.get(i).contains(mx, my)) {
+                    playResult(scrollRow + i);
+                    return true;
+                }
             }
+            return true;
         }
-        PlaybackSnapshot snap = AudioManager.get().snapshot();
-        if (playPauseRect.contains(mx, my)) {
+        if (containsPlayer(playPauseRect, mx, my)) {
             AudioManager.get().togglePlayPause();
             return true;
         }
-        if (stopRect.contains(mx, my)) {
+        if (containsPlayer(stopRect, mx, my)) {
             AudioManager.get().stop();
             LyricsManager.get().clear();
             return true;
         }
-        if (previousRect.contains(mx, my)) {
+        if (containsPlayer(previousRect, mx, my)) {
             AudioManager.get().previous();
             return true;
         }
-        if (nextRect.contains(mx, my)) {
+        if (containsPlayer(nextRect, mx, my)) {
             AudioManager.get().next();
             return true;
         }
-        if (lyricsRect.contains(mx, my)) {
+        if (containsPlayer(lyricsRect, mx, my)) {
             LyricsManager.get().toggleEnabled();
             return true;
         }
-        if (volumeDownRect.contains(mx, my)) {
-            AudioManager.get().setVolume(snap.volume() - 0.05f);
+        if (containsPlayer(volumeDownRect, mx, my)) {
+            AudioManager.get().setVolume(AudioManager.get().volume() - 0.05f);
             return true;
         }
-        if (volumeUpRect.contains(mx, my)) {
-            AudioManager.get().setVolume(snap.volume() + 0.05f);
+        if (containsPlayer(volumeUpRect, mx, my)) {
+            AudioManager.get().setVolume(AudioManager.get().volume() + 0.05f);
             return true;
         }
-        if (volumeRect.contains(mx, my)) {
+        if (containsPlayer(volumeRect, mx, my)) {
             float fraction = (float) ((mx - volumeRect.x()) / (double) volumeRect.width());
             AudioManager.get().setVolume(fraction);
             return true;
@@ -317,11 +417,23 @@ public final class MusicPlayerScreen extends Screen {
             return true;
         }
         if (event.key() == GLFW.GLFW_KEY_UP) {
-            scrollRow = Math.max(0, scrollRow - 1);
+            moveSelection(-1);
             return true;
         }
         if (event.key() == GLFW.GLFW_KEY_DOWN) {
-            scrollRow++;
+            moveSelection(1);
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_PAGE_UP) {
+            scrollRow = Ui.clampScroll(scrollRow - visibleRows, maxScroll());
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_PAGE_DOWN) {
+            scrollRow = Ui.clampScroll(scrollRow + visibleRows, maxScroll());
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_ENTER && selectedRow >= 0 && selectedRow < results.size()) {
+            playResult(selectedRow);
             return true;
         }
         return super.keyPressed(event);
@@ -341,8 +453,8 @@ public final class MusicPlayerScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amountX, double amountY) {
-        if (resultsRect != null && resultsRect.contains(mouseX, mouseY)) {
-            scrollRow = Math.max(0, scrollRow - (int) Math.signum(amountY));
+        if (resultsViewport != null && resultsViewport.contains(mouseX, mouseY)) {
+            scrollRow = Ui.clampScroll(scrollRow - (int) Math.signum(amountY) * 3, maxScroll());
             return true;
         }
         return false;
@@ -357,6 +469,8 @@ public final class MusicPlayerScreen extends Screen {
             LyricsManager.get().setTrack(track);
             if (track != null) ArtworkCache.request(track);
         }
+        scrollRow = Ui.clampScroll(scrollRow, maxScroll());
+        if (selectedRow >= results.size()) selectedRow = results.isEmpty() ? -1 : results.size() - 1;
     }
 
     @Override
@@ -373,7 +487,7 @@ public final class MusicPlayerScreen extends Screen {
     private void doSearch() {
         MusicService service = ServiceManager.active();
         if (!service.capabilities().search()) {
-            status = "Search unavailable: " + service.capabilities().note();
+            status = "Search unavailable: " + service.status().detail();
             return;
         }
         if (query.isBlank()) {
@@ -403,7 +517,7 @@ public final class MusicPlayerScreen extends Screen {
                 return;
             }
             AudioManager.get().setQueue(results);
-            status = results.size() + " results. Click a row to play.";
+            status = results.size() + " results. Click a row or press Enter to play.";
         }));
     }
 
@@ -431,9 +545,54 @@ public final class MusicPlayerScreen extends Screen {
         results = List.of();
         selectedRow = -1;
         scrollRow = 0;
-        AudioManager.get().stop();
+        AudioManager.get().clear();
         LyricsManager.get().clear();
-        status = services.get(next).displayName() + ": " + services.get(next).statusText();
+        status = services.get(next).status().line();
+    }
+
+    private void moveSelection(int direction) {
+        if (results.isEmpty()) return;
+        selectedRow = Math.max(0, Math.min(results.size() - 1,
+                (selectedRow < 0 ? (direction > 0 ? 0 : results.size() - 1) : selectedRow + direction)));
+        if (selectedRow < scrollRow) scrollRow = selectedRow;
+        if (selectedRow >= scrollRow + visibleRows) scrollRow = selectedRow - visibleRows + 1;
+        scrollRow = Ui.clampScroll(scrollRow, maxScroll());
+    }
+
+    private int maxScroll() {
+        return Math.max(0, results.size() - Math.max(1, visibleRows));
+    }
+
+    private static String playLabel(PlaybackSnapshot snap) {
+        return switch (snap.state()) {
+            case PAUSED -> "Play";
+            case PLAYING, BUFFERING -> "Pause";
+            case LOADING -> "Loading";
+            case FAILED -> snap.canRetry()
+                    ? "Retry " + (snap.maxRetryAttempts() - snap.retryAttempts()) + " left"
+                    : "No retries";
+            default -> "Play";
+        };
+    }
+
+    /** Places a button inside the available width, returning an empty rect when it will not fit. */
+    private static Ui.Rect place(int[] cursor, int y, int width, int height, int right, int gap) {
+        int x = cursor[0];
+        if (x + gap + width > right) return new Ui.Rect(0, 0, 0, 0);
+        cursor[0] = x + gap + width;
+        return new Ui.Rect(x + gap, y, width, height);
+    }
+
+    private boolean containsPlayer(Ui.Rect rect, double mouseX, double mouseY) {
+        return rect.intersection(playerRect).contains(mouseX, mouseY);
+    }
+
+    private void drawButton(GuiGraphics graphics, int mouseX, int mouseY, ModConfig.Colors c,
+                            Ui.Rect rect, String label, boolean enabled) {
+        Ui.Rect visible = rect.intersection(playerRect);
+        if (visible.width() <= 0 || visible.height() <= 0) return;
+        Ui.button(graphics, font, visible, label, c.controls, c.accent, c.textPrimary,
+                enabled, visible.contains(mouseX, mouseY));
     }
 
     private static int dimColor(int color) {

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased (source-only audit; no build performed)
+
+- Replaced ambiguous playback booleans with a single authoritative state machine (`IDLE`, `LOADING`,
+  `BUFFERING`, `PLAYING`, `PAUSED`, `STOPPED`, `FAILED`), generation/cancel guards, bounded retry,
+  safe cleanup and honest failure messages. No simulated playback remains.
+- Bounded audio stream opening with connect/read timeouts and guaranteed connection/stream teardown;
+  network and external-process work is asynchronous and capped.
+- Added an optional, disabled-by-default YouTube Music bridge for a user-installed `yt-dlp` executable.
+  Structured argv only; no shell, credentials, bundled/downloaded binary, impersonation, DRM/premium bypass,
+  auto-update, plugins or cookies.
+- Replaced generic "Not Integrated" labels with explicit integration level, playback support and auth
+  requirement. Spotify remains unintegrated: official Web API only, user OAuth/Premium/Connect-device limits
+  are documented. SoundCloud requires developer authorization.
+- Reworked the player and settings GUIs with fixed header/player areas, clipped scrolling result and settings
+  pages, clamped scrollbars, visible-region-only actions, and half-open hit regions.
+- Added per-field config validation and schema `2` (`playback`, `integrations`, `ui` sections), preserving
+  backward compatibility with older files and safe defaults.
+- Clamped and scissored the lyrics HUD, surfaced lookup errors honestly, and kept unsynced lyrics unhighlighted.
+
 ## 0.2.0
 
 - Replaced fake provider stubs with explicit capability declarations and three real integrations:

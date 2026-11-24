@@ -16,6 +16,8 @@
 - Deezer public API — search metadata and official 30-second previews.
 - Radio Browser / radio-browser.info — free station directory (AGPL-3.0 service).
 - LRCLIB — anonymous community lyrics database.
+- Optional YouTube Music bridge: uses a `yt-dlp` executable installed by the user, if they enable it.
+  yt-dlp is a separate third-party project; no executable is bundled or downloaded by MusicallyMods.
 - Track/station artwork is served by the corresponding service and cached locally at runtime.
 
 ## Toolchain
@@ -40,4 +42,6 @@ See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [THIRD_PARTY_LICENSES/L
 
 ## Notes
 
-No Spotify, YouTube Music, or SoundCloud credentials, cookies, tokens, or subscription/DRM bypasses are included. Those services are documented as not integrated.
+No Spotify, SoundCloud, or YouTube Music credentials, cookies, tokens, or subscription/DRM/access-control
+bypasses are included. Spotify and SoundCloud are explicitly not integrated. YouTube Music is only an
+opt-in bridge to a user-installed executable, disabled by default and documented as unofficial and ToS-gray.

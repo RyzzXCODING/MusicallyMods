@@ -2,7 +2,7 @@
 
 MusicallyMods is a **client-only** Fabric mod for Minecraft **1.21.11** (Java **21**) that provides a lightweight in-game music player, asynchronous search, real playback where the source legally permits it, artwork, and a customizable independent lyrics HUD.
 
-> **Honest scope:** this mod does not include Spotify, YouTube Music, or SoundCloud accounts, tokens, cookies, or DRM circumvention. Services that cannot be used legally and anonymously are shown as **not integrated**, with the reason in the GUI.
+> **Honest scope:** this mod does not include Spotify, YouTube Music or SoundCloud accounts, tokens, cookies, or DRM/access-control circumvention. Spotify and SoundCloud are shown as **not integrated** with the specific reason in the GUI. YouTube Music is an **opt-in, disabled-by-default** bridge that calls a user-installed `yt-dlp` executable; no executable is bundled or downloaded. It is unofficial, fragile and may conflict with YouTube's Terms of Service.
 
 ## Version contract
 
@@ -38,6 +38,18 @@ MusicallyMods is a **client-only** Fabric mod for Minecraft **1.21.11** (Java **
 - No metadata service, account, or playlist is invented for these URLs.
 - Format support is limited to the bundled Java Sound decoders plus JDK-supported formats.
 
+### YouTube Music (optional external bridge)
+
+- Disabled by default. Enable `integrations.youTubeMusicBridgeEnabled` only if you accept the risks.
+- Requires a `yt-dlp` executable that **you install yourself**, found on `PATH` or set as an absolute path in
+  `integrations.youTubeMusicBridgeExecutable`. Nothing is downloaded or bundled by the mod.
+- Structured arguments only: no shell string, cookies, browser stores, login, tokens, impersonation,
+  player-client switching, geo/access-control bypass, plugins, config loading or auto-update.
+- Extraction is bounded by a configurable timeout, cancellable, and its output is capped. Failures are
+  reported honestly; no playback is simulated.
+- Because YouTube's terms restrict automated access and use of content outside the service, this bridge is
+  unofficial and **ToS-gray**. Use it only where you have the right to access the content.
+
 ### LRCLIB lyrics
 
 - Anonymous, key-less lookup for tracks with real metadata (currently Deezer results).
@@ -47,23 +59,28 @@ MusicallyMods is a **client-only** Fabric mod for Minecraft **1.21.11** (Java **
 
 ### Not integrated (by design)
 
-| Service | Why |
+| Service | Explicit status |
 | --- | --- |
-| Spotify | Web API needs a user-supplied OAuth app/client ID; full playback control needs an active Spotify Connect device and may require Premium. No credentials are bundled. |
-| YouTube Music | No official public third-party playback API; unofficial clients risk Terms-of-Service violations. |
-| SoundCloud | Public API now requires developer authorization; no user tokens are bundled. |
+| Spotify | **Not integrated.** Official Web API only. Metadata/search would require user OAuth via Authorization Code with PKCE and a user-registered Client ID; no client secret, token or cookie is bundled. In-game audio is never exposed. Playback control is Premium-only, needs `user-modify-playback-state` and an active, unrestricted Spotify Connect device; Free accounts and restricted devices cannot be controlled. |
+| SoundCloud | **Not integrated.** Developer authorization/approval is required; no bundled client ID, user token, cookie or Premium bypass is included. No search or playback is offered. |
+| YouTube Music | **Not integrated by default.** The optional external `yt-dlp` bridge stays off until you enable it and supply your own executable. It is metadata/search plus direct stream extraction, not an official API or support. |
 
-These entries appear in the service selector so limitations are visible and no button is a no-op.
+These entries appear in the service selector with their integration level, playback support and authentication requirement, so limitations are visible and no button is a no-op.
 
 ## Features
 
-- Asynchronous search and metadata loading with timeouts and human-readable errors.
-- Streaming playback with play/pause, stop, previous/next, volume and progress.
+- Asynchronous, bounded search and metadata loading with timeouts and human-readable errors.
+- One authoritative playback state machine: `IDLE`, `LOADING`, `BUFFERING`, `PLAYING`, `PAUSED`, `STOPPED`, `FAILED`.
+  No contradictory playback booleans, no fake playback, bounded retry, and real failures shown in the GUI.
+- Streaming playback with play/pause, stop, previous/next, volume and progress; output lines and streams are
+  released on every terminal path, and stalled streams fail instead of hanging forever.
 - Artwork download and bounded texture cache.
-- Player GUI with service capability notes and explicit status.
-- Settings GUI with theme presets, per-color ARGB editor, lyrics position/alignment/size/layout options.
-- Independent lyrics overlay registered through Fabric's modern `HudElementRegistry`.
-- Persistent validated JSON config: `config/musicallymods.json`.
+- Player GUI with fixed header/footer, independently scrolling results, clipped/scissored content,
+  scrollbars, stable navigation, and half-open hit regions so adjacent controls never overlap.
+- Settings GUI with theme presets, per-color ARGB editor, and service-specific integration/auth/playback status.
+- Independent, clipped lyrics overlay registered through Fabric's modern `HudElementRegistry`.
+- Persistent schema-`2` JSON config: `config/musicallymods.json`. Older files are read field-by-field with
+  safe defaults; every UI, service, playback, integration, lyrics, keybind, color, volume and audio field is validated.
 - Corrupt or invalid config fields fall back individually; writes use a temporary file and atomic move when supported.
 
 ## Keybinds (defaults)
@@ -88,7 +105,28 @@ All bindings can be changed in **Minecraft → Options → Controls → Musicall
 - title/artist/artwork visibility;
 - confirmation-protected reset to defaults.
 
-Keybind names in the file use Minecraft key names such as `key.keyboard.m`; edit bindings in Controls rather than by hand.
+Additional sections written by the mod (schema `2`):
+
+```json
+{
+  "schemaVersion": 2,
+  "playback": {
+    "maxRetryAttempts": 2,
+    "requestTimeoutSeconds": 20,
+    "useMasterGain": true
+  },
+  "integrations": {
+    "youTubeMusicBridgeEnabled": false,
+    "youTubeMusicBridgeExecutable": ""
+  },
+  "ui": {
+    "resultRowHeight": 40,
+    "showScrollbars": true
+  }
+}
+```
+
+Keybind names in the file use Minecraft key names such as `key.keyboard.m`; they are bounded and syntax-checked on load, but should be edited in Controls rather than by hand.
 
 ## Build and install
 
@@ -100,7 +138,7 @@ For end users or maintainers with a normal toolchain:
 
 Place the produced client JAR in `mods/` alongside Fabric API for Minecraft 1.21.11.
 
-The production JAR was verified: correct `fabric.mod.json` entrypoint and dependency ranges, bundled audio decoder JARs under `META-INF/jars/`, exact official icon (SHA-256 `0ff25b5f…fc11dd`), and Java 21 bytecode (class major 65). Minecraft was not launched.
+A previously produced release JAR was verified: correct `fabric.mod.json` entrypoint and dependency ranges, bundled audio decoder JARs under `META-INF/jars/`, exact official icon (SHA-256 `0ff25b5f…fc11dd`), and Java 21 bytecode (class major 65). Minecraft was not launched. The source-only audit represented by the current repository state did **not** run any build.
 
 ## Audio dependencies
 

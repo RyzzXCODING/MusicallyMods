@@ -3,6 +3,7 @@ package cc.alpoyy.musicallymods.music.impl;
 import cc.alpoyy.musicallymods.music.MusicService;
 import cc.alpoyy.musicallymods.music.ServiceCapabilities;
 import cc.alpoyy.musicallymods.music.ServiceResult;
+import cc.alpoyy.musicallymods.music.ServiceStatus;
 import cc.alpoyy.musicallymods.music.Track;
 import cc.alpoyy.musicallymods.util.Errors;
 import cc.alpoyy.musicallymods.util.JsonUtil;
@@ -43,6 +44,13 @@ public final class DeezerService implements MusicService {
     @Override
     public String statusText() {
         return "Free public search API. No sign-in, no credentials. Previews only (30 seconds).";
+    }
+
+    @Override
+    public ServiceStatus status() {
+        return new ServiceStatus(ServiceStatus.IntegrationLevel.PREVIEW_ONLY,
+                ServiceStatus.PlaybackSupport.PREVIEW_ONLY, ServiceStatus.AuthRequirement.NONE,
+                "Implemented - official 30-second previews", CAPABILITIES.note());
     }
 
     @Override

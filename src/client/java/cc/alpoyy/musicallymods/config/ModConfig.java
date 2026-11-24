@@ -20,7 +20,7 @@ import java.util.Set;
  * single bad value never discards the rest of a user's settings.
  */
 public final class ModConfig {
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final Set<String> SERVICES = Set.of(
             "deezer", "radio", "custom", "spotify", "youtubemusic", "soundcloud");
@@ -31,6 +31,8 @@ public final class ModConfig {
             "BOTTOM_LEFT", "BOTTOM_CENTER", "BOTTOM_RIGHT",
             "MANUAL");
     private static final Set<String> ALIGNMENTS = Set.of("LEFT", "CENTER");
+    private static final java.util.regex.Pattern KEY_NAME =
+            java.util.regex.Pattern.compile("[a-z0-9_.-]+(\\.[a-z0-9_.-]+)*");
 
     private static ModConfig instance = new ModConfig();
     private static boolean dirty;
@@ -43,6 +45,9 @@ public final class ModConfig {
     public final Colors colors = new Colors();
     public final Lyrics lyrics = new Lyrics();
     public final Keybinds keybinds = new Keybinds();
+    public final Playback playback = new Playback();
+    public final Integrations integrations = new Integrations();
+    public final UiLayout ui = new UiLayout();
 
     public static ModConfig get() {
         return instance;
@@ -72,6 +77,21 @@ public final class ModConfig {
             c.volume = readFloat(root, "volume", c.volume, 0f, 1f);
             c.theme = oneOf(readString(root, "theme", c.theme), THEMES, c.theme);
             c.autoPauseOnClose = readBoolean(root, "autoPauseOnClose", c.autoPauseOnClose);
+
+            JsonObject playbackJson = readObject(root, "playback");
+            c.playback.maxRetryAttempts = readInt(playbackJson, "maxRetryAttempts", c.playback.maxRetryAttempts, 0, 5);
+            c.playback.requestTimeoutSeconds = readInt(playbackJson, "requestTimeoutSeconds", c.playback.requestTimeoutSeconds, 5, 120);
+            c.playback.useMasterGain = readBoolean(playbackJson, "useMasterGain", c.playback.useMasterGain);
+
+            JsonObject integrationsJson = readObject(root, "integrations");
+            c.integrations.youTubeMusicBridgeEnabled = readBoolean(integrationsJson,
+                    "youTubeMusicBridgeEnabled", c.integrations.youTubeMusicBridgeEnabled);
+            c.integrations.youTubeMusicBridgeExecutable = readBoundedString(integrationsJson,
+                    "youTubeMusicBridgeExecutable", c.integrations.youTubeMusicBridgeExecutable, 512);
+
+            JsonObject uiJson = readObject(root, "ui");
+            c.ui.resultRowHeight = readInt(uiJson, "resultRowHeight", c.ui.resultRowHeight, 32, 64);
+            c.ui.showScrollbars = readBoolean(uiJson, "showScrollbars", c.ui.showScrollbars);
 
             JsonObject colorsJson = readObject(root, "colors");
             c.colors.mainBg = readColor(colorsJson, "mainBg", c.colors.mainBg);
@@ -104,11 +124,11 @@ public final class ModConfig {
             c.lyrics.showArtwork = readBoolean(lyricsJson, "showArtwork", c.lyrics.showArtwork);
 
             JsonObject keysJson = readObject(root, "keybinds");
-            c.keybinds.open = readString(keysJson, "open", c.keybinds.open);
-            c.keybinds.lyrics = readString(keysJson, "lyrics", c.keybinds.lyrics);
-            c.keybinds.playPause = readString(keysJson, "playPause", c.keybinds.playPause);
-            c.keybinds.next = readString(keysJson, "next", c.keybinds.next);
-            c.keybinds.previous = readString(keysJson, "previous", c.keybinds.previous);
+            c.keybinds.open = readKey(keysJson, "open", c.keybinds.open);
+            c.keybinds.lyrics = readKey(keysJson, "lyrics", c.keybinds.lyrics);
+            c.keybinds.playPause = readKey(keysJson, "playPause", c.keybinds.playPause);
+            c.keybinds.next = readKey(keysJson, "next", c.keybinds.next);
+            c.keybinds.previous = readKey(keysJson, "previous", c.keybinds.previous);
 
             instance = c;
             dirty = false;
@@ -136,6 +156,22 @@ public final class ModConfig {
             root.addProperty("volume", c.volume);
             root.addProperty("theme", c.theme);
             root.addProperty("autoPauseOnClose", c.autoPauseOnClose);
+
+            JsonObject playbackJson = new JsonObject();
+            playbackJson.addProperty("maxRetryAttempts", c.playback.maxRetryAttempts);
+            playbackJson.addProperty("requestTimeoutSeconds", c.playback.requestTimeoutSeconds);
+            playbackJson.addProperty("useMasterGain", c.playback.useMasterGain);
+            root.add("playback", playbackJson);
+
+            JsonObject integrationsJson = new JsonObject();
+            integrationsJson.addProperty("youTubeMusicBridgeEnabled", c.integrations.youTubeMusicBridgeEnabled);
+            integrationsJson.addProperty("youTubeMusicBridgeExecutable", c.integrations.youTubeMusicBridgeExecutable);
+            root.add("integrations", integrationsJson);
+
+            JsonObject uiJson = new JsonObject();
+            uiJson.addProperty("resultRowHeight", c.ui.resultRowHeight);
+            uiJson.addProperty("showScrollbars", c.ui.showScrollbars);
+            root.add("ui", uiJson);
 
             JsonObject colorsJson = new JsonObject();
             colorsJson.addProperty("mainBg", hex(c.colors.mainBg));
@@ -271,6 +307,25 @@ public final class ModConfig {
         public String previous = "key.keyboard.b";
     }
 
+    /** Playback limits and audio preferences; all values are validated on load. */
+    public static final class Playback {
+        public int maxRetryAttempts = 2;
+        public int requestTimeoutSeconds = 20;
+        public boolean useMasterGain = true;
+    }
+
+    /** Optional, user-controlled external integrations. No credentials or tokens are stored. */
+    public static final class Integrations {
+        public boolean youTubeMusicBridgeEnabled = false;
+        public String youTubeMusicBridgeExecutable = "";
+    }
+
+    /** Responsive GUI layout preferences. */
+    public static final class UiLayout {
+        public int resultRowHeight = 40;
+        public boolean showScrollbars = true;
+    }
+
     private static JsonObject readObject(JsonObject parent, String key) {
         try {
             JsonElement e = parent.get(key);
@@ -292,6 +347,19 @@ public final class ModConfig {
             // Fall through to defaults.
         }
         return def;
+    }
+
+    private static String readBoundedString(JsonObject o, String key, String def, int maxLength) {
+        String value = readString(o, key, def);
+        if (value == null) return def;
+        value = value.replaceAll("\\p{Cntrl}+", "").trim();
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    /** Bounded, syntax-checked Minecraft key identifier; anything else falls back to the default. */
+    private static String readKey(JsonObject o, String key, String def) {
+        String value = readBoundedString(o, key, def, 64);
+        return KEY_NAME.matcher(value).matches() ? value : def;
     }
 
     private static boolean readBoolean(JsonObject o, String key, boolean def) {

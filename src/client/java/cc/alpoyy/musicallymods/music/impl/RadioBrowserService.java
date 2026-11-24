@@ -3,6 +3,7 @@ package cc.alpoyy.musicallymods.music.impl;
 import cc.alpoyy.musicallymods.music.MusicService;
 import cc.alpoyy.musicallymods.music.ServiceCapabilities;
 import cc.alpoyy.musicallymods.music.ServiceResult;
+import cc.alpoyy.musicallymods.music.ServiceStatus;
 import cc.alpoyy.musicallymods.music.Track;
 import cc.alpoyy.musicallymods.util.Errors;
 import cc.alpoyy.musicallymods.util.JsonUtil;
@@ -45,6 +46,13 @@ public final class RadioBrowserService implements MusicService {
     @Override
     public String statusText() {
         return "Radio Browser directory (free, no sign-in). Station search only; codec support varies.";
+    }
+
+    @Override
+    public ServiceStatus status() {
+        return new ServiceStatus(ServiceStatus.IntegrationLevel.IMPLEMENTED,
+                ServiceStatus.PlaybackSupport.NATIVE, ServiceStatus.AuthRequirement.NONE,
+                "Implemented - live station search and playback", CAPABILITIES.note());
     }
 
     @Override
