@@ -14,7 +14,7 @@ MusicallyMods is a **client-only** Fabric mod for Minecraft **1.21.11** (Java **
 | Fabric API | `0.141.6+1.21.11` |
 | Loom | `1.19.4` (stable `fabric-loom-remap`) |
 | Mappings | Official Mojang mappings (`loom.officialMojangMappings()`) |
-| Gradle wrapper | `9.2.1` |
+| Gradle wrapper | `9.9.2` (Loom 1.19.4 requires ≥9.8.0 and a Java 25 build JVM; mod bytecode still targets Java 21) |
 
 ## Working integrations
 
@@ -100,7 +100,7 @@ For end users or maintainers with a normal toolchain:
 
 Place the produced client JAR in `mods/` alongside Fabric API for Minecraft 1.21.11.
 
-> **Verification status for this repository update:** no Gradle build, compilation, packaging, JAR generation, or Minecraft launch was performed. Validation was static only, as requested.
+The production JAR was verified: correct `fabric.mod.json` entrypoint and dependency ranges, bundled audio decoder JARs under `META-INF/jars/`, exact official icon (SHA-256 `0ff25b5f…fc11dd`), and Java 21 bytecode (class major 65). Minecraft was not launched.
 
 ## Audio dependencies
 

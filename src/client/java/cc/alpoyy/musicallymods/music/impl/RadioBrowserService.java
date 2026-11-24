@@ -50,7 +50,7 @@ public final class RadioBrowserService implements MusicService {
     @Override
     public CompletableFuture<ServiceResult<List<Track>>> search(String query) {
         String url = String.format(ENDPOINT, URLEncoder.encode(query, StandardCharsets.UTF_8));
-        return NetworkManager.getString(url).thenApply(json -> {
+        return NetworkManager.getString(url).<ServiceResult<List<Track>>>thenApply(json -> {
             JsonArray data = JsonParser.parseString(json).getAsJsonArray();
             List<Track> tracks = new ArrayList<>();
             for (JsonElement element : data) {
@@ -82,7 +82,7 @@ public final class RadioBrowserService implements MusicService {
             }
             if (tracks.isEmpty()) return ServiceResult.failure("No live stations found for that search.");
             return ServiceResult.success(List.copyOf(tracks));
-        }).exceptionally(throwable -> ServiceResult.failure("Radio search failed: " + Errors.describe(throwable)));
+        }).exceptionally(throwable -> ServiceResult.<List<Track>>failure("Radio search failed: " + Errors.describe(throwable)));
     }
 
     private static boolean isSupported(String codec) {

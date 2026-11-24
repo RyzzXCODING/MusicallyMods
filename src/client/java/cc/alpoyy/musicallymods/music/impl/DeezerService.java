@@ -48,7 +48,7 @@ public final class DeezerService implements MusicService {
     @Override
     public CompletableFuture<ServiceResult<List<Track>>> search(String query) {
         String url = "https://api.deezer.com/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8) + "&limit=20";
-        return NetworkManager.getString(url).thenApply(json -> {
+        return NetworkManager.getString(url).<ServiceResult<List<Track>>>thenApply(json -> {
             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
             JsonArray data = root.getAsJsonArray("data");
             if (data == null) {
@@ -81,7 +81,7 @@ public final class DeezerService implements MusicService {
             }
             if (tracks.isEmpty()) return ServiceResult.failure("No Deezer tracks found for that search.");
             return ServiceResult.success(List.copyOf(tracks));
-        }).exceptionally(throwable -> ServiceResult.failure("Deezer search failed: " + Errors.describe(throwable)));
+        }).exceptionally(throwable -> ServiceResult.<List<Track>>failure("Deezer search failed: " + Errors.describe(throwable)));
     }
 
     private static String firstNonBlank(String... values) {

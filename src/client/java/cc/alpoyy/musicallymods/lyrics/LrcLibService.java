@@ -34,7 +34,7 @@ public final class LrcLibService {
         if (track.durationMs() > 0) {
             url.append("&duration=").append(Math.round(track.durationMs() / 1000.0));
         }
-        return NetworkManager.getString(url.toString()).thenApply(json -> {
+        return NetworkManager.getString(url.toString()).<ServiceResult<LyricsData>>thenApply(json -> {
             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
             String synced = JsonUtil.string(root, "syncedLyrics");
             String plain = JsonUtil.string(root, "plainLyrics");
@@ -53,7 +53,7 @@ public final class LrcLibService {
                         false, untimed, "LRCLIB", ""));
             }
             return ServiceResult.failure("No lyrics found for this track.");
-        }).exceptionally(throwable -> ServiceResult.failure("Lyrics lookup failed: " + Errors.describe(throwable)));
+        }).exceptionally(throwable -> ServiceResult.<LyricsData>failure("Lyrics lookup failed: " + Errors.describe(throwable)));
     }
 
     private static List<LyricLine> splitPlain(String plain) {

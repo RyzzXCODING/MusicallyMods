@@ -57,8 +57,9 @@ public final class MusicSettingsScreen extends Screen {
         Ui.label(graphics, font, "MusicallyMods Settings", MARGIN, 10, c.textPrimary);
         int navX = MARGIN + 160;
         for (int i = 0; i < PAGE_NAMES.length; i++) {
+            final int pageIndex = i;
             Ui.Rect rect = new Ui.Rect(navX + i * 92, 8, 86, 20);
-            addButton(graphics, font, rect, PAGE_NAMES[i], true, () -> page = i, c, mouseX, mouseY);
+            addButton(graphics, font, rect, PAGE_NAMES[i], true, () -> page = pageIndex, c, mouseX, mouseY);
         }
         addButton(graphics, font, new Ui.Rect(width - MARGIN - 70, 8, 70, 20), "Done", true,
                 this::closeToParent, c, mouseX, mouseY);

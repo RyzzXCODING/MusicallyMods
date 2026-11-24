@@ -25,9 +25,10 @@ public final class LyricsHud implements HudElement {
         ModConfig.Lyrics cfg = config.lyrics;
         if (!cfg.enabled || client.options.hideGui) return;
 
-        LyricsData data = LyricsManager.current();
+        LyricsManager lyricsManager = LyricsManager.get();
+        LyricsData data = lyricsManager.current();
         if (data.isEmpty()) return;
-        Track track = LyricsManager.currentTrack();
+        Track track = lyricsManager.currentTrack();
         PlaybackSnapshot snapshot = AudioManager.get().snapshot();
 
         int width = cfg.width;
@@ -85,7 +86,7 @@ public final class LyricsHud implements HudElement {
         }
 
         List<LyricLine> lines = data.lines();
-        int active = LyricsManager.get().currentIndex(snapshot.positionMs());
+        int active = lyricsManager.currentIndex(snapshot.positionMs());
         int start = 0;
         if (data.synced() && active >= 0) start = Math.max(0, active - cfg.maxLines / 2);
         int remainingLocal = (int) ((y + height - padding - textY) / fontScale);
