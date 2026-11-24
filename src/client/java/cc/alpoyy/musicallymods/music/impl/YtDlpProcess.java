@@ -121,9 +121,10 @@ public final class YtDlpProcess {
         try {
             process = builder.start();
             if (onStart != null) onStart.accept(process);
-            stdoutReader = new Thread(() -> drain(process.getInputStream(), stdout, stdoutTruncated),
+            Process running = process;
+            stdoutReader = new Thread(() -> drain(running.getInputStream(), stdout, stdoutTruncated),
                     "musicallymods-ytdlp-stdout");
-            stderrReader = new Thread(() -> drain(process.getErrorStream(), stderr, stderrTruncated),
+            stderrReader = new Thread(() -> drain(running.getErrorStream(), stderr, stderrTruncated),
                     "musicallymods-ytdlp-stderr");
             stdoutReader.setDaemon(true);
             stderrReader.setDaemon(true);

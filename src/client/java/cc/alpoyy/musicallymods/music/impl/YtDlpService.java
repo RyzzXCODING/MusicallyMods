@@ -180,7 +180,13 @@ public final class YtDlpService implements MusicService, StreamResolver {
             return ServiceResult.failure(failureMessage(result));
         }
 
-        JsonObject root = parse(result.stdout());
+        JsonObject root;
+        try {
+            root = parse(result.stdout());
+        } catch (IOException e) {
+            Errors.logTechnical("yt-dlp returned invalid JSON", e);
+            return ServiceResult.failure("The optional bridge returned invalid JSON: " + Errors.describe(e));
+        }
         JsonArray entries = root.getAsJsonArray("entries");
         List<Track> tracks = new ArrayList<>();
         if (entries != null) {

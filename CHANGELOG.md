@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (source-only audit; no build performed)
+## 0.2.1
 
 - Replaced ambiguous playback booleans with a single authoritative state machine (`IDLE`, `LOADING`,
   `BUFFERING`, `PLAYING`, `PAUSED`, `STOPPED`, `FAILED`), generation/cancel guards, bounded retry,
@@ -18,6 +18,8 @@
 - Added per-field config validation and schema `2` (`playback`, `integrations`, `ui` sections), preserving
   backward compatibility with older files and safe defaults.
 - Clamped and scissored the lyrics HUD, surfaced lookup errors honestly, and kept unsynced lyrics unhighlighted.
+- Built with `./gradlew build` (Gradle 9.9.2, Loom 1.19.4, Java 25 build JVM). Verified Java 21 bytecode
+  (class major 65), exact official icon, nested audio decoder JARs and correct metadata.
 
 ## 0.2.0
 
