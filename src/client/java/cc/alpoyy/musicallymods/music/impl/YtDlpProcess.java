@@ -1,13 +1,12 @@
 package cc.alpoyy.musicallymods.music.impl;
 
-import cc.alpoyy.musicallymods.config.ModConfig;
 import cc.alpoyy.musicallymods.util.Errors;
+import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -33,11 +32,6 @@ public final class YtDlpProcess {
     private static final int MAX_OUTPUT_BYTES = 256 * 1024;
     private static final long WAIT_SLICE_MS = 100L;
     private static final long TEARDOWN_WAIT_SECONDS = 2L;
-    private static final long DETECTION_TTL_NANOS = 30L * 1_000_000_000L;
-    private static volatile Detection cachedDetection;
-
-    private record Detection(String configuredPath, long checkedAtNanos, Optional<Path> result) {
-    }
     private static final ExecutorService SEARCH_POOL = Executors.newFixedThreadPool(2, runnable -> {
         Thread thread = new Thread(runnable, "musicallymods-ytdlp");
         thread.setDaemon(true);
@@ -53,46 +47,12 @@ public final class YtDlpProcess {
 
     public static void shutdown() {
         SEARCH_POOL.shutdownNow();
+        YtDlpManager.shutdown();
     }
 
-    /**
-     * Resolves an explicit config path or a PATH lookup; never returns an invalid path. Results are
-     * cached briefly so render-time status checks never repeatedly probe the filesystem.
-     */
+    /** Delegates to the manager so every caller shares one OS-aware, cached detection result. */
     public static Optional<Path> findExecutable() {
-        String configured = ModConfig.get().integrations.youTubeMusicBridgeExecutable;
-        Detection cached = cachedDetection;
-        long now = System.nanoTime();
-        if (cached != null && cached.configuredPath().equals(configured)
-                && now - cached.checkedAtNanos() < DETECTION_TTL_NANOS) {
-            return cached.result();
-        }
-        Optional<Path> result = detect(configured);
-        cachedDetection = new Detection(configured, now, result);
-        return result;
-    }
-
-    private static Optional<Path> detect(String configured) {
-        if (configured != null && !configured.isBlank()) {
-            try {
-                return executable(Path.of(configured));
-            } catch (RuntimeException e) {
-                return Optional.empty();
-            }
-        }
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv == null || pathEnv.isBlank()) return Optional.empty();
-        String name = isWindows() ? "yt-dlp.exe" : "yt-dlp";
-        for (String part : pathEnv.split(java.io.File.pathSeparator)) {
-            if (part.isBlank()) continue;
-            try {
-                Optional<Path> found = executable(Path.of(part, name));
-                if (found.isPresent()) return found;
-            } catch (RuntimeException ignored) {
-                // Skip malformed PATH entries.
-            }
-        }
-        return Optional.empty();
+        return YtDlpManager.executable();
     }
 
     public static Result run(List<String> command, AtomicBoolean cancel, int timeoutSeconds) {
@@ -107,6 +67,11 @@ public final class YtDlpProcess {
         ProcessBuilder builder = new ProcessBuilder(command)
                 .redirectErrorStream(false)
                 .redirectInput(ProcessBuilder.Redirect.DISCARD);
+        try {
+            builder.directory(FabricLoader.getInstance().getGameDir().toFile());
+        } catch (RuntimeException ignored) {
+            // A missing or inaccessible game directory falls back to the JVM working directory.
+        }
         Process process = null;
         Thread stdoutReader = null;
         Thread stderrReader = null;
@@ -185,21 +150,6 @@ public final class YtDlpProcess {
         if (stdoutTruncated[0]) out += "\n[output truncated]";
         if (stderrTruncated[0]) err += "\n[output truncated]";
         return new Result(exitCode, out, err, timedOut, cancelled);
-    }
-
-    private static Optional<Path> executable(Path path) {
-        try {
-            Path absolute = path.toAbsolutePath().normalize();
-            return Files.isRegularFile(absolute) && Files.isExecutable(absolute)
-                    ? Optional.of(absolute) : Optional.empty();
-        } catch (RuntimeException e) {
-            return Optional.empty();
-        }
-    }
-
-    private static boolean isWindows() {
-        String os = System.getProperty("os.name", "");
-        return os.toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
     private static void destroy(Process process) {

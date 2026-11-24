@@ -38,18 +38,19 @@ public final class YtDlpService implements MusicService, StreamResolver {
             "YouTube Music playback is disabled. Enable the optional external bridge and configure a "
                     + "user-installed yt-dlp executable in config/musicallymods.json. Nothing is downloaded or bundled.";
     private static final String NO_EXECUTABLE =
-            "The YouTube Music bridge is enabled, but no executable yt-dlp was found on PATH or in config. "
-                    + "Playback is not attempted until you install it yourself.";
+            "The YouTube Music bridge is enabled, but no executable yt-dlp was found in the configured path, "
+                    + "the mod's dependency directory, PATH, or common user install locations. Open the "
+                    + "YouTube Music tab to inspect detection or configure an absolute path.";
     private static final String NOTE =
             "Unofficial opt-in bridge. Not YouTube support; no login, cookies, Premium or bypass. "
                     + "Extraction is fragile and may conflict with YouTube's terms.";
     private static final List<String> COMMON_FLAGS = List.of(
-            "--no-config", "--no-plugin-dirs", "--no-remote-components", "--no-cache-dir",
-            "--no-update", "--no-progress", "--no-warnings", "--no-part", "--no-mtime",
-            "--socket-timeout", "10", "--retries", "1", "--extractor-retries", "1",
-            "--fragment-retries", "1");
+            "--ignore-config", "--no-cache-dir", "--no-update", "--no-progress", "--no-warnings",
+            "--no-part", "--no-mtime", "--socket-timeout", "10", "--retries", "1",
+            "--extractor-retries", "1", "--fragment-retries", "1");
 
     private final Map<String, Process> activeProcesses = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> inFlight = new ConcurrentHashMap<>();
 
     @Override
     public String id() {
@@ -63,7 +64,7 @@ public final class YtDlpService implements MusicService, StreamResolver {
 
     @Override
     public ServiceCapabilities capabilities() {
-        boolean available = enabled() && YtDlpProcess.findExecutable().isPresent();
+        boolean available = enabled() && YtDlpManager.executable().isPresent();
         return new ServiceCapabilities(
                 true, true, true, available, true, true, false, false,
                 available ? NOTE : (enabled() ? NO_EXECUTABLE : DISABLED));
@@ -84,17 +85,24 @@ public final class YtDlpService implements MusicService, StreamResolver {
                     "Not integrated by default - optional external bridge available",
                     DISABLED);
         }
-        if (YtDlpProcess.findExecutable().isEmpty()) {
-            return new ServiceStatus(ServiceStatus.IntegrationLevel.OPT_IN_EXTERNAL_BRIDGE,
-                    ServiceStatus.PlaybackSupport.EXTERNAL_BRIDGE,
-                    ServiceStatus.AuthRequirement.USER_CONFIGURED_EXECUTABLE,
-                    "Bridge enabled - yt-dlp executable not found",
-                    NO_EXECUTABLE);
-        }
+        YtDlpManager.Diagnostic dependency = YtDlpManager.diagnostic();
+        String summary = switch (dependency.status()) {
+            case DETECTING -> "Bridge enabled - checking yt-dlp";
+            case READY -> "Bridge ready - yt-dlp " + dependency.version();
+            case DETECTED -> "Bridge detected - verifying yt-dlp";
+            case INCOMPATIBLE -> "Bridge blocked - incompatible yt-dlp version";
+            case PERMISSION_ERROR -> "Bridge blocked - yt-dlp permission error";
+            case MISSING -> "Bridge enabled - configured yt-dlp path missing";
+            case FAILED -> "Bridge blocked - yt-dlp health check failed";
+            case NOT_INSTALLED -> "Bridge enabled - yt-dlp executable not found";
+        };
+        String detail = dependency.lastError().isBlank()
+                ? (dependency.status() == YtDlpManager.Status.READY ? NOTE : NO_EXECUTABLE)
+                : dependency.lastError();
         return new ServiceStatus(ServiceStatus.IntegrationLevel.OPT_IN_EXTERNAL_BRIDGE,
                 ServiceStatus.PlaybackSupport.EXTERNAL_BRIDGE,
                 ServiceStatus.AuthRequirement.USER_CONFIGURED_EXECUTABLE,
-                "Optional yt-dlp bridge active (unofficial, ToS-gray)", NOTE);
+                summary, detail);
     }
 
     @Override
@@ -105,12 +113,18 @@ public final class YtDlpService implements MusicService, StreamResolver {
         if (!enabled()) {
             return CompletableFuture.completedFuture(ServiceResult.failure(DISABLED));
         }
-        Path executable = YtDlpProcess.findExecutable().orElse(null);
+        Path executable = YtDlpManager.executable().orElse(null);
         if (executable == null) {
-            return CompletableFuture.completedFuture(ServiceResult.failure(NO_EXECUTABLE));
+            return CompletableFuture.completedFuture(ServiceResult.failure(notReadyMessage()));
+        }
+        String key = "search:" + query.trim().toLowerCase(java.util.Locale.ROOT);
+        if (inFlight.putIfAbsent(key, Boolean.TRUE) != null) {
+            return CompletableFuture.completedFuture(
+                    ServiceResult.failure("That search is already running. Wait for it to finish."));
         }
         return CompletableFuture.supplyAsync(() -> searchBlocking(query.trim(), executable),
                 YtDlpProcess.searchExecutor())
+                .whenComplete((result, throwable) -> inFlight.remove(key))
                 .exceptionally(throwable -> ServiceResult.failure(
                         "YouTube Music bridge failed: " + Errors.describe(throwable)));
     }
@@ -119,22 +133,25 @@ public final class YtDlpService implements MusicService, StreamResolver {
     public String resolve(Track track, AtomicBoolean cancel) throws Exception {
         if (track == null) throw new IOException("No track to resolve.");
         if (!enabled()) throw new IllegalStateException(DISABLED);
-        Path executable = YtDlpProcess.findExecutable().orElse(null);
-        if (executable == null) throw new IllegalStateException(NO_EXECUTABLE);
-
-        List<String> command = baseCommand(executable);
-        command.add("--no-playlist");
-        command.add("--dump-single-json");
-        command.add("--skip-download");
-        command.add("-f");
-        command.add("bestaudio/best[acodec!=none]");
-        command.add("--");
-        command.add(track.streamUrl());
+        Path executable = YtDlpManager.executable().orElse(null);
+        if (executable == null) throw new IllegalStateException(notReadyMessage());
 
         String key = key(track);
-        YtDlpProcess.Result result = YtDlpProcess.run(command, cancel, timeoutSeconds(),
-                process -> activeProcesses.put(key, process));
+        if (inFlight.putIfAbsent("resolve:" + key, Boolean.TRUE) != null) {
+            throw new IOException("This track is already being prepared.");
+        }
         try {
+            List<String> command = baseCommand(executable);
+            command.add("--no-playlist");
+            command.add("--dump-single-json");
+            command.add("--skip-download");
+            command.add("-f");
+            command.add("bestaudio/best[acodec!=none]");
+            command.add("--");
+            command.add(track.streamUrl());
+
+            YtDlpProcess.Result result = YtDlpProcess.run(command, cancel, timeoutSeconds(),
+                    process -> activeProcesses.put(key, process));
             if (!result.ok()) {
                 throw new IOException(failureMessage(result));
             }
@@ -146,6 +163,7 @@ public final class YtDlpService implements MusicService, StreamResolver {
             return url;
         } finally {
             activeProcesses.remove(key);
+            inFlight.remove("resolve:" + key);
         }
     }
 
@@ -273,6 +291,17 @@ public final class YtDlpService implements MusicService, StreamResolver {
 
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String notReadyMessage() {
+        YtDlpManager.Diagnostic diagnostic = YtDlpManager.diagnostic();
+        if (diagnostic.status() == YtDlpManager.Status.PERMISSION_ERROR
+                || diagnostic.status() == YtDlpManager.Status.INCOMPATIBLE
+                || diagnostic.status() == YtDlpManager.Status.FAILED
+                || diagnostic.status() == YtDlpManager.Status.MISSING) {
+            return diagnostic.lastError().isBlank() ? NO_EXECUTABLE : diagnostic.lastError();
+        }
+        return NO_EXECUTABLE;
     }
 
     private static boolean enabled() {

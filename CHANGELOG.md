@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased (source-only verification)
+
+- Replaced one-shot PATH/executable detection with OS/arch-aware, ordered detection across configured path,
+  mod-managed dependency directory, `PATH` and common user install locations. Timestamped `--version`
+  health checks now report version, source, path, last error, permission problems and incompatible builds.
+- Hardened yt-dlp process handling: structured argv only, no shell, bounded output/timeouts, asynchronous
+  checks, cancellation, descendant cleanup, explicit exit-code handling and truthful diagnostics.
+- Added an explicit two-click opt-in installer using only official yt-dlp release assets and
+  `SHA2-256SUMS`, with SHA-256 verification before the executable is moved, POSIX permission setting,
+  progress, cancellation and failure recovery.
+- Added consent-gated local session storage in `config/musicallymods-auth.json` with owner-only POSIX
+  permissions, per-provider corruption isolation, redaction and no tokens in main config or logs.
+- Added a shared official OAuth 2.0/2.1 PKCE helper with IPv4 loopback callback, exact state validation,
+  cancellation and 5-minute timeout. No browser opens during silent startup reconnect. Restored sessions
+  are shown as Reconnecting until the official profile endpoint validates them.
+- Startup never executes a detected yt-dlp binary while the opt-in bridge is disabled; `--version` health
+  checks run only after explicit enablement or a manual Retry. Checksum status stays unverified until an
+  official asset has actually been verified.
+- Added independent platform managers for Spotify, SoundCloud and YouTube Music. Spotify uses a public
+  Client ID with Web API metadata/search, profile validation, refresh and Spotify Connect device control;
+  raw audio remains unsupported. SoundCloud uses the current official developer API with the user's own
+  confidential credentials, exact registered loopback redirect, playable-only metadata search,
+  attribution and official disconnect; HLS playback remains unsupported. YouTube Music remains an
+  unauthenticated, opt-in bridge with no Google credentials.
+- Added six-tab navigation (Home, YouTube Music, Spotify, SoundCloud, Lyrics, Settings) and one reusable,
+  responsive platform page with status/account info, redacted details, connectivity actions, dependency
+  diagnostics, artwork/results where supported and clipped scroll regions.
+- Preserved existing player, lyrics HUD, keybinds, colors, config schema `2` fields and migration behavior.
+
+BUILD NOT PERFORMED — compilation and in-game testing remain unverified.
+
 ## 0.2.1
 
 - Replaced ambiguous playback booleans with a single authoritative state machine (`IDLE`, `LOADING`,

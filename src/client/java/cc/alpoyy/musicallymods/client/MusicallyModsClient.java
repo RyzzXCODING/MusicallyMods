@@ -2,6 +2,7 @@ package cc.alpoyy.musicallymods.client;
 
 import cc.alpoyy.musicallymods.MusicallyMods;
 import cc.alpoyy.musicallymods.audio.AudioManager;
+import cc.alpoyy.musicallymods.auth.PlatformConnection;
 import cc.alpoyy.musicallymods.config.ModConfig;
 import cc.alpoyy.musicallymods.hud.LyricsHud;
 import cc.alpoyy.musicallymods.music.ServiceManager;
@@ -21,6 +22,10 @@ public final class MusicallyModsClient implements ClientModInitializer {
                 Identifier.fromNamespaceAndPath(MusicallyMods.MOD_ID, "lyrics"), new LyricsHud());
 
         ClientTickEvents.END_CLIENT_TICK.register(KeybindManager::handle);
+
+        // Silent startup reconnect: no browser opens and no saved setting is discarded on failure.
+        PlatformConnection.reconnectAll();
+
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             ModConfig.saveIfDirty();
             AudioManager.get().shutdown();
@@ -30,6 +35,7 @@ public final class MusicallyModsClient implements ClientModInitializer {
 
         MusicallyMods.LOGGER.info(
                 "MusicallyMods client ready. Integrations: Deezer previews, Radio Browser stations, direct streams, "
-                        + "optional opt-in yt-dlp bridge, LRCLIB lyrics. Spotify and SoundCloud remain explicitly unavailable.");
+                        + "optional opt-in yt-dlp bridge, Spotify Web API metadata/Connect control with user OAuth, "
+                        + "official SoundCloud API with user credentials, and LRCLIB lyrics.");
     }
 }

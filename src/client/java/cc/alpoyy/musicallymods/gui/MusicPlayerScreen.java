@@ -65,6 +65,7 @@ public final class MusicPlayerScreen extends Screen {
     private Ui.Rect volumeDownRect;
     private Ui.Rect volumeUpRect;
     private final List<Ui.Rect> rowRects = new ArrayList<>();
+    private final GuiNav nav = new GuiNav();
 
     public MusicPlayerScreen() {
         super(Component.translatable("screen.musicallymods.title"));
@@ -75,8 +76,8 @@ public final class MusicPlayerScreen extends Screen {
         int margin = width < 520 ? 8 : 12;
         int right = Math.max(margin, width - margin);
         int availableWidth = Math.max(0, right - margin);
-        int headerY = 8;
-        int headerHeight = 18;
+        int headerY = 24;
+        int headerHeight = 16;
 
         int navTotal = Math.min(124, Math.max(36, availableWidth));
         int settingsWidth = Math.max(24, Math.min(width < 520 ? 58 : 72, navTotal / 2));
@@ -88,7 +89,7 @@ public final class MusicPlayerScreen extends Screen {
         nextServiceRect = nextServiceRect.intersection(new Ui.Rect(0, 0, width, height));
         settingsRect = settingsRect.intersection(new Ui.Rect(0, 0, width, height));
 
-        int searchY = 30;
+        int searchY = 44;
         int searchHeight = 20;
         int buttonWidth = Math.max(40, Math.min(width < 520 ? 58 : 68, availableWidth / 3));
         int inputWidth = Math.max(0, availableWidth - buttonWidth - 6);
@@ -96,7 +97,7 @@ public final class MusicPlayerScreen extends Screen {
         searchButtonRect = new Ui.Rect(searchRect.right() + 6, searchY, buttonWidth, searchHeight);
 
         showNote = height >= 330;
-        int listTop = showNote ? 78 : (height >= 260 ? 62 : 56);
+        int listTop = showNote ? 92 : (height >= 280 ? 74 : 66);
         int minListHeight = height >= 260 ? 36 : 0;
         int maxPlayerHeight = Math.max(80, Math.min(148, height / 3));
         int playerHeight = Math.min(maxPlayerHeight, Math.max(60, height - listTop - minListHeight - 8));
@@ -174,13 +175,16 @@ public final class MusicPlayerScreen extends Screen {
         renderBackground(graphics, mouseX, mouseY, delta);
         graphics.fill(0, 0, width, height, c.mainBg);
 
+        nav.render(graphics, font, 4, 2, Math.max(0, width - 8), 18, width, height,
+                GuiNav.Tab.HOME, c, mouseX, mouseY);
+
         MusicService service = ServiceManager.active();
         ServiceStatus serviceStatus = service.status();
-        Ui.label(graphics, font, "MusicallyMods", Math.max(8, width < 520 ? 8 : 12), 12, c.textPrimary);
+        Ui.label(graphics, font, "MusicallyMods", Math.max(8, width < 520 ? 8 : 12), 27, c.textPrimary);
         if (width >= 560) {
             int labelX = (width < 520 ? 8 : 12) + font.width("MusicallyMods") + 12;
             Ui.label(graphics, font, Ui.fit(font, service.displayName(),
-                    previousServiceRect.x() - labelX - 8), labelX, 12, c.textSecondary);
+                    previousServiceRect.x() - labelX - 8), labelX, 27, c.textSecondary);
         }
         Ui.button(graphics, font, previousServiceRect, "<", c.controls, c.accent, c.textPrimary, true,
                 previousServiceRect.contains(mouseX, mouseY));
@@ -332,6 +336,11 @@ public final class MusicPlayerScreen extends Screen {
         if (event.button() != 0) return false;
         double mx = event.x();
         double my = event.y();
+        GuiNav.Tab tab = nav.clicked(mx, my);
+        if (tab != null) {
+            GuiNav.open(minecraft, tab, this);
+            return true;
+        }
         editingQuery = searchRect.contains(mx, my);
         if (previousServiceRect.contains(mx, my)) {
             cycleService(-1);

@@ -4,7 +4,8 @@ import cc.alpoyy.musicallymods.config.ModConfig;
 import cc.alpoyy.musicallymods.music.MusicService;
 import cc.alpoyy.musicallymods.music.ServiceManager;
 import cc.alpoyy.musicallymods.music.ServiceStatus;
-import cc.alpoyy.musicallymods.music.impl.YtDlpProcess;
+import cc.alpoyy.musicallymods.music.impl.YtDlpManager;
+import cc.alpoyy.musicallymods.util.Errors;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -34,6 +35,7 @@ public final class MusicSettingsScreen extends Screen {
     private static final int SCROLL_STEP = 48;
 
     private final Screen parent;
+    private final GuiNav nav = new GuiNav();
     private final List<Action> actions = new ArrayList<>();
     private final int[] scrollByPage = new int[PAGE_NAMES.length];
     private final int[] contentHeights = new int[PAGE_NAMES.length];
@@ -51,8 +53,13 @@ public final class MusicSettingsScreen extends Screen {
     }
 
     public MusicSettingsScreen(Screen parent) {
+        this(parent, 0);
+    }
+
+    public MusicSettingsScreen(Screen parent, int initialPage) {
         super(Component.translatable("screen.musicallymods.settings"));
         this.parent = parent;
+        this.page = Math.max(0, Math.min(PAGE_NAMES.length - 1, initialPage));
     }
 
     @Override
@@ -62,20 +69,23 @@ public final class MusicSettingsScreen extends Screen {
         actions.clear();
         graphics.fill(0, 0, width, height, c.mainBg);
 
-        boolean compactHeader = width < 700;
-        int contentTop = compactHeader ? 52 : 34;
-        String title = compactHeader ? "Settings" : "MusicallyMods Settings";
-        Ui.label(graphics, font, title, MARGIN, 10, c.textPrimary);
-        int doneWidth = compactHeader ? 58 : 70;
-        Ui.Rect doneRect = new Ui.Rect(width - MARGIN - doneWidth, 8, doneWidth, 20)
+        nav.render(graphics, font, 4, 2, Math.max(0, width - 8), 18, width, height,
+                page == 1 ? GuiNav.Tab.LYRICS : GuiNav.Tab.SETTINGS, c, mouseX, mouseY);
+
+        String title = width < 700 ? "Settings" : "MusicallyMods Settings";
+        Ui.label(graphics, font, title, MARGIN, 24, c.textPrimary);
+        int doneWidth = width < 700 ? 58 : 70;
+        Ui.Rect doneRect = new Ui.Rect(width - MARGIN - doneWidth, 22, doneWidth, 20)
                 .intersection(new Ui.Rect(0, 0, width, height));
         Ui.button(graphics, font, doneRect, "Done", c.controls, c.accent, c.textPrimary, true,
                 doneRect.contains(mouseX, mouseY));
         actions.add(new Action(doneRect, this::closeToParent));
 
-        int navY = compactHeader ? 30 : 8;
-        int navStart = compactHeader ? MARGIN : MARGIN + 160;
-        int navRight = doneRect.x() - 8;
+        int navY = 46;
+        int navStart = MARGIN;
+        int navRight = Math.max(navStart, width - MARGIN);
+        int contentTop = 72;
+        boolean compactHeader = width < 700;
         int gap = 4;
         int availableNav = Math.max(0, navRight - navStart - gap * (PAGE_NAMES.length - 1));
         int navWidth = compactHeader
@@ -352,10 +362,30 @@ public final class MusicSettingsScreen extends Screen {
                 c, mouseX, mouseY);
         y += 26;
         drawLabel(graphics, x, y, ytDlpDetection(), c.textSecondary);
-        y += 14;
+        y += 12;
+        YtDlpManager.Diagnostic diagnostic = YtDlpManager.diagnostic();
+        if (!diagnostic.lastError().isBlank()) {
+            for (String line : Ui.wrap(font, diagnostic.lastError(), w, 3)) {
+                drawLabel(graphics, x, y, line, c.accent);
+                y += 10;
+            }
+        }
+        addButton(graphics, x, y, 78, 18, "Retry", true, () -> {
+            ytDlpDetection = null;
+            status = "Rechecking yt-dlp...";
+            YtDlpManager.refreshAsync().whenComplete((result, throwable) -> minecraft.execute(() -> {
+                ytDlpDetection = null;
+                status = throwable == null
+                        ? "yt-dlp: " + result.status() : "Detection failed: " + Errors.describe(throwable);
+            }));
+        }, c, mouseX, mouseY);
+        addButton(graphics, x + 82, y, 140, 18, "YouTube Music tab", true,
+                () -> GuiNav.open(minecraft, GuiNav.Tab.YOUTUBE_MUSIC, this), c, mouseX, mouseY);
+        y += 22;
         for (String line : Ui.wrap(font,
-                "Set integrations.youTubeMusicBridgeExecutable in config/musicallymods.json to an absolute path "
-                        + "if PATH detection fails. No executable is bundled or downloaded.", w, 3)) {
+                "A configured absolute path can be set with integrations.youTubeMusicBridgeExecutable in "
+                        + "config/musicallymods.json. Optional official download with checksum verification is on "
+                        + "the YouTube Music tab; nothing installs without confirmation.", w, 3)) {
             drawLabel(graphics, x, y, line, c.textSecondary);
             y += 10;
         }
@@ -379,6 +409,11 @@ public final class MusicSettingsScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
         if (event.button() != 0) return false;
+        GuiNav.Tab tab = nav.clicked(event.x(), event.y());
+        if (tab != null) {
+            GuiNav.open(minecraft, tab, parent);
+            return true;
+        }
         for (Action action : actions) {
             if (action.rect().contains(event.x(), event.y())) {
                 action.onClick().run();
@@ -477,11 +512,13 @@ public final class MusicSettingsScreen extends Screen {
         minecraft.setScreen(parent);
     }
 
-    /** PATH/filesystem probing is cached for the lifetime of this screen, not done per frame. */
+    /** Reads the cached diagnostic; health checks only run from Retry or the platform page. */
     private String ytDlpDetection() {
         if (ytDlpDetection == null) {
-            ytDlpDetection = YtDlpProcess.findExecutable().isPresent()
-                    ? "yt-dlp executable: detected" : "yt-dlp executable: not detected";
+            YtDlpManager.Diagnostic diagnostic = YtDlpManager.diagnostic();
+            ytDlpDetection = "yt-dlp: " + diagnostic.status()
+                    + (diagnostic.version().isBlank() ? "" : " " + diagnostic.version())
+                    + (diagnostic.path() == null ? "" : " | " + diagnostic.path());
         }
         return ytDlpDetection;
     }

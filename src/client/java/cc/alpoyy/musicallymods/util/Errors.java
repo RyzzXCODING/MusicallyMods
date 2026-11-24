@@ -11,7 +11,10 @@ public final class Errors {
     private static final Pattern URL = Pattern.compile(
             "(?i)\\b(https?://[^\\s?#:]+(?::\\d+)?[^\\s?#]*)(?:\\?[^\\s#]*)?(?:#\\S*)?");
     private static final Pattern SENSITIVE_FIELD = Pattern.compile(
-            "(?i)\\b(access_token|refresh_token|client_secret|authorization|api_key|apikey|token|code|password|cookie)=([^&\\s]+)");
+            "(?i)\\b(access_token|refresh_token|id_token|client_secret|authorization|api_key|apikey|"
+                    + "token|code_verifier|code|state|password|cookie)=([^&\\s]+)");
+    private static final Pattern BEARER = Pattern.compile(
+            "(?i)\\b(bearer|oauth)\\s+[A-Za-z0-9._~+/=-]{8,}");
 
     private Errors() {
     }
@@ -39,6 +42,7 @@ public final class Errors {
         if (raw == null || raw.isBlank()) return "";
         String text = raw.replace('\r', ' ').replace('\n', ' ');
         text = URL.matcher(text).replaceAll("$1?<redacted>");
+        text = BEARER.matcher(text).replaceAll("$1 <redacted>");
         Matcher fields = SENSITIVE_FIELD.matcher(text);
         StringBuffer out = new StringBuffer();
         while (fields.find()) {
